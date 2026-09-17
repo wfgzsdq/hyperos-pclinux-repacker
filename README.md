@@ -1,5 +1,158 @@
 # 小米 PC 框架 ARM64 Linux 应用封装实验 v0.2
 
+# ARM64 deb → 小米 PC 框架 APK
+
+`deb2apk.py` 是统一入口。它读取 deb 的 control 与 `.desktop`，解析真正的可执行文件、启动参数、应用名称和 PNG 图标，生成独立 Android 包，打包为只读 EROFS 并签名。不会执行 deb 维护脚本，也不需要先在 rootfs 中用 dpkg 安装软件。
+
+**适用范围：可以重定位运行、依赖与平板现有 Ubuntu 22.04 ARM64 环境兼容的 GUI 软件。** “可以接受 ARM64 deb 作为输入”不意味着任何 deb 都能直接运行；纯库包、驱动、系统服务和依赖安装脚本的软件需要额外适配。脚本会输出依赖和兼容性提示，不承诺自动解决这些问题。
+
+## 准备
+
+- Windows、Python 3.11+、Java 17；通过 `python setup_tools.py` 下载并校验 Android 构建工具和 ARM64 erofs-tools。Java 默认使用本次测试的 Microsoft JDK 路径，其他机器设置 `PCLINUX_JAVA_BIN` 指向自己的 JDK `bin`。
+
+- 构建新 EROFS 镜像时需要已连接的 ARM64 小米平板、运行中的 ADB server 和可用的 root ADB shell。`--serial` 是 `adb devices` 显示的序列号。
+
+- 设备已有小米 PC Linux 框架；运行 APK 前先用 WPS PC/CAJ 初始化框架。隐藏 root 模块需要把每个新 APK 的包名加入许可范围。
+
+- gzip/xz/bzip2/未压缩 tar 使用标准库；zstd 压缩的 deb 在 Python 3.14+ 可直接读取，Python 3.11–3.13 先运行 `python -m pip install zstandard`。
+
+
+示例在脚本目录执行；脚本也支持从其他工作目录传入完整路径。
+
+```powershell
+
+# 默认从桌面入口推断配置，完整封装，不自动安装
+
+python deb2apk.py "D:\Downloads\example_arm64.deb" --serial 898cd909
+
+
+# 隐藏 root 的设备可以明确指定 ADB 侧 su 路径
+
+python deb2apk.py "D:\Downloads\example_arm64.deb" --serial 898cd909 --adb-su /debug_ramdisk/su
+
+
+# 安装脚本单独执行，避免在普通构建时中断设备上的应用
+
+python install_apk.py jobs/example/example-pc.apk --serial 898cd909
+
+```
+
+
+每个应用的资产、图标、镜像、编译文件在 `jobs/<id>/`，不同应用不会互相覆盖。默认包名 `local.pclinux.<id>`。相同应用的配置、版本及运行参数会写入 `app.json`，APK 旁边的 `.build.json` 包含 deb、镜像、APK 和图标来源的校验信息。
+
+
+同一个工作目录请不要并发执行两次构建。`--work-dir` 可指定独立工作目录；`--output` 指定完整 APK 输出路径。
+
+
+## 先检查，再编辑配置
+
+
+```powershell
+
+python deb2apk.py app.deb --inspect
+
+python deb2apk.py app.deb --configure-only
+
+# 修改生成的 jobs/<id>/app.json 后
+
+python deb2apk.py app.deb --config jobs/<id>/app.json --serial 898cd909
+
+```
+
+
+含多个可见 `.desktop` 入口时，脚本列出选择项并要求 `--desktop example.desktop`，不会随便选一个。没有桌面入口时用 `--entry usr/bin/example`。符号链接会解析到 deb 内实际可执行文件；指向包外可执行文件的入口不能自动推断。脚本入口会提示检查其绝对路径。
+
+
+`--inspect`、`--configure-only` 不需要连接平板。生成完整新镜像需要平板；复用从同一 deb 构建的镜像时，可用 `--reuse-image image.erofs --image-sha256 <完整SHA256>`，脚本校验摘要与 EROFS 超级块。复用时应由调用者保证镜像和输入 deb 对应，不能拿另一个软件的镜像替代。
+
+
+## 常用适配
+
+
+```powershell
+
+python deb2apk.py app.deb --serial 898cd909 --id my_editor --package local.pclinux.myeditor --label "My Editor PC" --entry usr/lib/myeditor/editor --arg=--ozone-platform=x11 --arg=--disable-gpu
+
+
+python deb2apk.py app.deb --serial 898cd909 --env "LD_LIBRARY_PATH=@APP@/usr/lib/myeditor" --env "MY_CONFIG=@DATA@/config"
+
+
+python deb2apk.py app.deb --serial 898cd909 --scheme myeditor --url-arg=--open-url --url-arg=@URL@
+
+```
+
+
+`--arg` 是**替换整组启动参数**，可重复使用；以 `--` 开头的参数使用 `--arg=--flag` 写法。`@APP@` 替换成镜像挂载目录，`@DATA@` 替换成此应用的数据目录。环境变量通过 `env` JSON 对象或 `--env NAME=VALUE` 配置；PATH、BROWSER、DBUS_SESSION_BUS_ADDRESS 由桥接保留。
+
+
+默认使用独立 HOME/XDG 数据目录；软件若依赖共享的 `/home/xiaomi` 可在配置中明确修改。默认用 `flock` 防止重复启动长期运行的 GUI 进程，特殊会自行派生并退出的程序可设置 `single_instance_lock: false` 后自行管理单实例。
+
+
+已知 VS Code 路径会自动应用现有可用参数、独立配置和 vscode 回调。其他 Electron 软件可选择 `--preset electron`，加入 `--no-sandbox --disable-gpu --disable-dev-shm-usage --ozone-platform=x11`；这是兼容性取舍，需要自行确认。`--preset generic` 禁用自动的 VS Code/Electron 预设。
+
+
+桌面 Exec 解析支持通常的独立参数和标准字段；`%f/%F/%u/%U/%i` 等启动时无上下文的字段会省略。复杂 `env` 包装命令、特殊字段或脚本应改用显式入口与参数。可执行程序必须在镜像中，未自动执行 apt 依赖解析或安装；缺依赖时需要进一步准备运行环境或制作含依赖的重定位包。
+
+
+## 图标与登录
+
+
+按 `.desktop` 的 Icon 字段找到 deb 内 PNG，优先取较大尺寸，提取原始字节作为 Android drawable，并写入 manifest 的 `android:icon`。图标摘要、包内路径和尺寸记录在构建信息中。SVG-only 软件可通过 `--icon icon.png` 提供 PNG；未找到 PNG 时使用 Android 默认图标并提示。
+
+
+所有应用复用 HTTP(S) → Android 浏览器桥。自定义回调仅注册配置中的 `callback_schemes`；没有配置时不会注册 vscode 或其他应用协议。`callback_args` 必须包含一个单独的 `@URL@`，其他内容作为普通参数引用。授权回调由原应用校验和交换令牌，启动器不代替 OAuth 客户端。
+
+
+JSON 示例：
+
+
+```json
+
+{
+
+  "id": "my_editor",
+
+  "package": "local.pclinux.myeditor",
+
+  "label": "My Editor PC",
+
+  "version_code": 1,
+
+  "version_name": "1.0",
+
+  "entry": "usr/lib/myeditor/editor",
+
+  "args": ["--profile", "@DATA@/profile"],
+
+  "env": {"XDG_CONFIG_HOME": "@DATA@/config"},
+
+  "callback_schemes": ["myeditor"],
+
+  "callback_args": ["--open-url", "@URL@"]
+
+}
+
+```
+
+
+若配置含 `deb_sha256`，输入必须匹配该摘要。升级 deb 时先重新检查元数据，再更新摘要；脚本不会悄悄忽略不匹配。升级 APK 要保持 package 和签名，递增 `version_code`。默认使用目录内的 `local-test.jks`（公开实验密码、别名 pclinux），可通过 `--key` 指定同格式实验密钥；不要把这种公开密码签名当作生产密钥管理。
+
+
+## 本次 VS Code 更新
+
+
+`vscode.json` 保持 `local.pclinux.vscode`，versionCode 3，versionName 0.2.1。图标来自 `usr/share/pixmaps/vscode.png`，原图 1024×1024，SHA256 为 `7537330cec94b308feaa9bb66db45b5554b8379ec7dce83990521d2860bca4b2`。原镜像及用户数据路径沿用 v0.2，登录回调改为配置读取。
+
+
+```powershell
+
+python deb2apk.py downloads/vscode-arm64.deb --config vscode.json --serial 898cd909 --output VSCode-PC-arm64-1.138.0-launcher-v0.2.1.apk
+
+```
+
+
+框架限制仍在：使用私有 Binder 协议、appType 0，建议一次运行一个封装应用；APK 不是独立 Linux 虚拟机，不能脱离小米 rootfs。系统升级可能影响兼容性。源码中的原始 `repack.py`、`make_assets.py` 和 `build_apk.py` 仍可分步调用，统一入口优先使用本脚本。
+
 将官方 ARM64 deb 校验、规范化为只读 EROFS 镜像，再与原创 Android 启动器打包、签名为独立 APK。测试应用为 VS Code 1.138.0。APK 内包含应用镜像，不需要另外下载 deb；运行时依赖平板已有的小米 PC Linux 环境。
 
 ## 使用完整 APK
