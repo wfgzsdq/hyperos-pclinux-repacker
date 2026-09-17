@@ -1,0 +1,28 @@
+{
+  "id": "zotero",
+  "package": "local.pclinux.zotero",
+  "label": "Zotero PC · 实验版",
+  "version_code": 1,
+  "version_name": "0.1",
+  "source_type": "tar",
+  "source_sha256": "ed348f235f2d555ed5e67759d51b1a7688e87c4304e8e57eba7a631c3a760ff8",
+  "archive_strip_components": 1,
+  "desktop_file": "zotero.desktop",
+  "entry": "zotero-bin",
+  "args": ["-app", "@APP@/app/application.ini"],
+  "icon_member": "icons/icon128.png",
+  "callback_schemes": ["zotero"],
+  "callback_args": ["-url", "@URL@"],
+  "single_instance_lock": true,
+  "env": {
+    "HOME": "@DATA@/home",
+    "XDG_CONFIG_HOME": "@DATA@/config",
+    "XDG_CACHE_HOME": "@DATA@/cache",
+    "XDG_DATA_HOME": "@DATA@/data",
+    "XDG_DATA_DIRS": "/usr/local/share:/usr/share",
+    "MOZ_ALLOW_DOWNGRADE": "1",
+    "MOZ_LEGACY_PROFILES": "1",
+    "MOZ_ENABLE_WAYLAND": "0",
+    "GDK_BACKEND": "x11"
+  }
+}

@@ -1,7 +1,10 @@
 {
   "id": "vscode",
   "package": "local.pclinux.vscode",
-  "version_code": 2,
+  "version_code": 3,
+  "version_name": "0.2.1",
+  "callback_schemes": ["vscode"],
+  "callback_args": ["--open-url", "@URL@"],
   "label": "VS Code PC · 实验版",
   "entry": "usr/share/code/code",
   "args": ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--ozone-platform=x11", "--reuse-window", "--user-data-dir=@DATA@", "--extensions-dir=@DATA@/extensions"],

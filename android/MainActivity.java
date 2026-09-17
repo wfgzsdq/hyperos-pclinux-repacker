@@ -3,7 +3,7 @@ import android.app.*;import android.os.*;import android.content.*;import android
 public class MainActivity extends Activity {
  static final String SERVER="com.xiaomi.baselibrary.multiwindow.IServer",CLIENT="com.xiaomi.baselibrary.multiwindow.IAppClient";
  IBinder server;volatile long session;TextView status;Desktop screen;volatile boolean alive=true;boolean bound;boolean announced;
- boolean resumed, textActive, deployed; int activeWindow=-1,mainWindow=-1; Desktop inputTarget; BrowserBridge browser; String pendingUrl; final Map<Integer,NativeDialog> dialogs=new HashMap<>();
+ boolean resumed, textActive, deployed; int activeWindow=-1,mainWindow=-1; Desktop inputTarget; BrowserBridge browser; String pendingUrl; String appId; final Set<String> callbackSchemes=new HashSet<>(); final List<String> callbackArgs=new ArrayList<>(); final Map<Integer,NativeDialog> dialogs=new HashMap<>();
  final java.util.concurrent.ExecutorService inputQueue=java.util.concurrent.Executors.newSingleThreadExecutor();
  java.lang.Process broker;DataInputStream bin;DataOutputStream bout;
  final LinkedHashMap<Integer,Frame> windows=new LinkedHashMap<>();final Object framesLock=new Object();
@@ -47,7 +47,7 @@ public class MainActivity extends Activity {
    runOnUiThread(()->{screen.invalidate();for(NativeDialog dialog:dialogs.values())dialog.desktop.invalidate();});if(!announced){say("运行中 · Linux ARM64");announced=true;}Thread.sleep(70);
   }
  }catch(Exception e){say("画面连接失败："+e+"。请允许此应用使用 root。");}}
- public void onCreate(Bundle b){super.onCreate(b);getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);status=new TextView(this);status.setTextSize(12);screen=new Desktop(-1);inputTarget=screen;try{browser=new BrowserBridge(this);}catch(Exception e){say("浏览器桥接初始化失败");}receiveIntent(getIntent());
+ public void onCreate(Bundle b){super.onCreate(b);getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);status=new TextView(this);status.setTextSize(12);screen=new Desktop(-1);inputTarget=screen;try{loadAppConfig();browser=new BrowserBridge(this);}catch(Exception e){say("应用配置或浏览器桥接初始化失败");}receiveIntent(getIntent());
   LinearLayout layout=new LinearLayout(this);layout.setOrientation(1);LinearLayout bar=new LinearLayout(this);Button keyboard=new Button(this);keyboard.setText("键盘");keyboard.setFocusable(false);keyboard.setOnClickListener(v->{if(inputTarget==null)inputTarget=screen;showKeyboard(true);});bar.addView(keyboard);bar.addView(status,new LinearLayout.LayoutParams(0,-2,1));layout.addView(bar);layout.addView(screen,new LinearLayout.LayoutParams(-1,0,1));setContentView(layout);
   Intent i=new Intent();i.setComponent(new ComponentName("com.xiaomi.mslgrdp","com.xiaomi.mslgrdp.multwindow.MultiWindowService"));try{bound=bindService(i,connection,BIND_AUTO_CREATE);say("bind="+bound);}catch(Exception e){say(e.toString());}
   new Thread(()->{try{Installer.start(this);deployed=true;deliverPendingUrl();worker();}catch(Exception e){say("启动失败："+e.getMessage());}},"frame-reader").start();
@@ -77,12 +77,15 @@ public class MainActivity extends Activity {
  @Override protected void onResume(){super.onResume();resumed=true;if(activeWindow>=0)focus(activeWindow);}
  @Override protected void onPause(){resumed=false;if(alive)inputQueue.execute(()->{for(int k:new int[]{160,161,162,163,164,165})rawKey(k,false);});super.onPause();}
  @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);receiveIntent(intent);if(deployed)new Thread(()->deliverPendingUrl(),"login-return").start();}
- synchronized void receiveIntent(Intent intent){if(intent!=null&&Intent.ACTION_VIEW.equals(intent.getAction())){android.net.Uri u=intent.getData();if(u!=null&&"vscode".equals(u.getScheme())&&u.toString().length()<=32768&&u.toString().indexOf('\n')<0&&u.toString().indexOf('\r')<0){pendingUrl=u.toString();Log.i("PCLinuxBrowser","Received vscode callback");}}}
+ void loadAppConfig()throws Exception{try(InputStream in=getAssets().open("app.json")){org.json.JSONObject c=new org.json.JSONObject(new String(Root.read(in),"UTF-8"));appId=c.getString("id");if(!appId.matches("[a-z][a-z0-9_]{0,31}"))throw new IOException("Invalid application ID");org.json.JSONArray schemes=c.optJSONArray("callback_schemes"),args=c.optJSONArray("callback_args");if(schemes!=null)for(int i=0;i<schemes.length();i++)callbackSchemes.add(schemes.getString(i));if(args!=null)for(int i=0;i<args.length();i++)callbackArgs.add(args.getString(i));}}
+ synchronized void receiveIntent(Intent intent){if(intent!=null&&Intent.ACTION_VIEW.equals(intent.getAction())){android.net.Uri u=intent.getData();if(u!=null&&callbackSchemes.contains(u.getScheme())&&u.toString().length()<=32768&&u.toString().indexOf('\n')<0&&u.toString().indexOf('\r')<0){pendingUrl=u.toString();Log.i("PCLinuxBrowser","Received application callback");}}}
  synchronized void deliverPendingUrl(){String uri=pendingUrl;if(uri==null)return;pendingUrl=null;try{
   // Keep authorization data out of the root request command and its policy log.
-  String command="IFS= read -r callback; nohup /opt/pclinux/vscode/launch.sh --open-url \"$callback\" >/dev/null 2>&1 </dev/null &";
+  String command="IFS= read -r callback; nohup "+quote("/opt/pclinux/"+appId+"/launch.sh");
+  for(String arg:callbackArgs)command+=" "+("@URL@".equals(arg)?"\"$callback\"":quote(arg));
+  command+=" >/dev/null 2>&1 </dev/null &";
   Root.send("/vendor/bin/chroot /data/rootfs /bin/su -s /bin/sh product_hyperengine -c "+quote(command),uri+"\n");
-  Log.i("PCLinuxBrowser","Forwarded vscode callback to Linux");
+  Log.i("PCLinuxBrowser","Forwarded application callback to Linux");
  }catch(Exception e){say("登录回调转发失败，请重试登录");}}
  class NativeDialog extends Dialog{
   Desktop desktop;int id;
