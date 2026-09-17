@@ -1,0 +1,10 @@
+{
+  "id": "vscode",
+  "package": "local.pclinux.vscode",
+  "version_code": 2,
+  "label": "VS Code PC · 实验版",
+  "entry": "usr/share/code/code",
+  "args": ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--ozone-platform=x11", "--reuse-window", "--user-data-dir=@DATA@", "--extensions-dir=@DATA@/extensions"],
+  "deb_sha256": "09760b73fb96ca19f8c6e483ec5b69123f34edd2c762cc9e0faf73fa3d400145",
+  "source_url": "https://vscode.download.prss.microsoft.com/dbazure/download/stable/7debcd0e2acdea1c52de81bf9ee1620444407dda/code_1.138.0-1789458676_arm64.deb"
+}

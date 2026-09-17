@@ -1,0 +1,11 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="local.pclinux.vscode" android:versionCode="2" android:versionName="0.2">
+ <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="32"/>
+ <uses-permission android:name="android.permission.INTERNET"/>
+ <queries><package android:name="com.xiaomi.mslgrdp"/><intent><action android:name="android.intent.action.VIEW"/><data android:scheme="https"/></intent></queries>
+ <application android:theme="@android:style/Theme.Material.Light.NoActionBar" android:label="VS Code PC · 实验版" android:allowBackup="false" android:supportsRtl="true">
+  <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask" android:windowSoftInputMode="adjustNothing|stateAlwaysHidden" android:configChanges="orientation|screenSize|keyboardHidden|keyboard" android:resizeableActivity="true">
+   <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+   <intent-filter><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="vscode"/></intent-filter>
+  </activity>
+ </application>
+</manifest>
