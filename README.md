@@ -1,6 +1,8 @@
 # 小米 PC 框架 ARM64 Linux 应用封装实验 v0.2
 
-# 现阶段，你的设备需要解锁并获取root权限方可使用该项目，欢迎PR或提交Issues。本项目不保证后续HyperOS版本能够正常使用，不受理由此产生的Issue适配，请自行修改源码并调试
+## 现阶段，你的设备需要解锁并获取root权限方可使用该项目，欢迎PR或提交Issues。本项目不保证后续HyperOS版本能够正常使用，不受理由此产生的Issue适配，请自行修改源码并调试
+
+## 示例apk请[点击此处](https://github.com/wfgzsdq/hyperos-pclinux-repacker/releases)下载
 
 # ARM64 deb → 小米 PC 框架 APK
 
