@@ -1,5 +1,7 @@
 # 小米 PC 框架 ARM64 Linux 应用封装实验 v0.2
 
+# 现阶段，你的设备需要解锁并获取root权限方可使用该项目，欢迎PR或提交Issues。本项目不保证后续HyperOS版本能够正常使用，不受理由此产生的Issue适配，请自行修改源码并调试
+
 # ARM64 deb → 小米 PC 框架 APK
 
 `deb2apk.py` 是统一入口。它读取 deb 的 control 与 `.desktop`，解析真正的可执行文件、启动参数、应用名称和 PNG 图标，生成独立 Android 包，打包为只读 EROFS 并签名。不会执行 deb 维护脚本，也不需要先在 rootfs 中用 dpkg 安装软件。
